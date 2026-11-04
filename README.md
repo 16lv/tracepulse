@@ -1,5 +1,7 @@
 # Data Analysis Workbench
 
+![CI Status](https://github.com/16lv/data-analysis-workbench/actions/workflows/ci.yml/badge.svg)
+
 A reproducible data ingestion, SQLite analytical query engine, cohort aggregation, and statistical anomaly detection workbench built in **Python 3.12**.
 
 ## Overview
