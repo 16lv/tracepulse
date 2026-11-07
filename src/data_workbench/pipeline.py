@@ -39,11 +39,7 @@ class ServiceStatistics:
 
 
 class AnalyticsWorkbench:
-    """
-    Loads CSV datasets into pandas/SQLite, cleans missing or out-of-range observations,
-    calculates service-level statistical distributions using NumPy/pandas, detects Z-score
-    outliers, and generates Matplotlib SVG/PNG visualisations.
-    """
+    # Loads CSV logs into SQLite + pandas, filters bad rows, and calculates latency stats.
 
     def __init__(self, db_path: str | Path = ":memory:") -> None:
         self._conn = sqlite3.connect(str(db_path))
@@ -66,6 +62,7 @@ class AnalyticsWorkbench:
         self._conn.commit()
 
     def ingest_csv(self, csv_path: Path) -> dict[str, int]:
+        # Skip rows with missing IDs, negative latencies, or error rates outside 0-100%
         inserted = 0
         rejected = 0
 
@@ -170,6 +167,7 @@ class AnalyticsWorkbench:
         latencies = [float(r["latency_ms"]) for r in rows]
         mean = statistics.fmean(latencies)
         std = statistics.pstdev(latencies)
+        # Avoid divide-by-zero if all recorded latencies for a service are identical
         if std == 0.0:
             return []
 
@@ -189,7 +187,7 @@ class AnalyticsWorkbench:
         return anomalies
 
     def export_latency_chart(self, output_path: Path) -> Path:
-        """Generates a dark-themed Matplotlib bar & p95 comparison chart from the loaded dataset."""
+        # Render p50 vs p95 bar chart using the non-interactive Agg backend
         summaries = self.summarize_by_service()
         if not summaries:
             raise ValueError("Cannot generate chart from empty dataset")
