@@ -6,7 +6,7 @@ import sqlite3
 import statistics
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -60,6 +60,15 @@ class AnalyticsWorkbench:
             """
         )
         self._conn.commit()
+
+    def close(self) -> None:
+        self._conn.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        self.close()
 
     def ingest_csv(self, csv_path: Path) -> dict[str, int]:
         # Skip rows with missing IDs, negative latencies, or error rates outside 0-100%

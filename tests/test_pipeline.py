@@ -24,29 +24,29 @@ def test_csv_ingestion_pandas_summary_and_chart_export(
         encoding="utf-8",
     )
 
-    wb = AnalyticsWorkbench(":memory:")
-    counts = wb.ingest_csv(csv_path)
-    assert counts["inserted"] == 8
-    assert counts["rejected"] == 2
+    with AnalyticsWorkbench(":memory:") as wb:
+        counts = wb.ingest_csv(csv_path)
+        assert counts["inserted"] == 8
+        assert counts["rejected"] == 2
 
-    df = wb.to_dataframe()
-    assert len(df) == 8
+        df = wb.to_dataframe()
+        assert len(df) == 8
 
-    summaries = wb.summarize_by_service()
-    assert len(summaries) == 2
-    checkout = next(s for s in summaries if s.service == "checkout-api")
-    assert checkout.sample_count == 6
-    assert checkout.median_latency_ms == 25.25
-    assert checkout.total_requests_per_sec == 2760
+        summaries = wb.summarize_by_service()
+        assert len(summaries) == 2
+        checkout = next(s for s in summaries if s.service == "checkout-api")
+        assert checkout.sample_count == 6
+        assert checkout.median_latency_ms == 25.25
+        assert checkout.total_requests_per_sec == 2760
 
-    anomalies = wb.detect_latency_anomalies("checkout-api", z_threshold=2.0)
-    assert len(anomalies) == 1
-    assert anomalies[0]["record_id"] == "r6"
+        anomalies = wb.detect_latency_anomalies("checkout-api", z_threshold=2.0)
+        assert len(anomalies) == 1
+        assert anomalies[0]["record_id"] == "r6"
 
-    chart_file = tmp_path / "latency_chart.svg"
-    wb.export_latency_chart(chart_file)
-    assert chart_file.exists()
-    assert chart_file.stat().st_size > 1000
+        chart_file = tmp_path / "latency_chart.svg"
+        wb.export_latency_chart(chart_file)
+        assert chart_file.exists()
+        assert chart_file.stat().st_size > 1000
 
 
 def test_pearson_correlation_matches_linear_relationship() -> None:
