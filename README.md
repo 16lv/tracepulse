@@ -1,12 +1,12 @@
-# TracePulse
+# Telemetry Latency Analyser (telemetry-latency-analyser)
 
-![CI Status](https://github.com/16lv/tracepulse/actions/workflows/ci.yml/badge.svg)
+![CI Status](https://github.com/16lv/telemetry-latency-analyser/actions/workflows/ci.yml/badge.svg)
 
-**TracePulse** is a telemetry data ingestion, SQLite analytical query engine, cohort aggregation, and statistical anomaly detection workbench built in **Python 3.12** with **pandas**, **NumPy**, and **matplotlib**.
+**Telemetry Latency Analyser** ($(System.Collections.Hashtable.newRepo)) is a telemetry data ingestion, SQLite analytical query engine, cohort aggregation, and statistical anomaly detection workbench built in **Python 3.12** with **pandas**, **NumPy**, and **matplotlib**.
 
 ## Why I Built It
 
-Raw CSV service logs often contain missing identifiers, negative latencies, or out-of-range error percentages that silently skew averages and percentile charts if loaded straight into a notebook. I built TracePulse to separate row-level validation from statistical aggregation, storing verified records in an indexed SQLite table before computing per-service percentiles (`p50`, `p95`), Z-score latency outliers, and headless SVG comparison charts.
+Raw CSV service logs often contain missing identifiers, negative latencies, or out-of-range error percentages that silently skew averages and percentile charts if loaded straight into a notebook. I built Telemetry Latency Analyser to separate row-level validation from statistical aggregation, storing verified records in an indexed SQLite table before computing per-service percentiles (`p50`, `p95`), Z-score latency outliers, and headless SVG comparison charts.
 
 ## Key Capabilities
 
