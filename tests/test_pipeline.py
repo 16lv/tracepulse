@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from src.data_workbench.pipeline import AnalyticsWorkbench, pearson_correlation
 
 
@@ -53,3 +55,16 @@ def test_pearson_correlation_matches_linear_relationship() -> None:
     rps = [100.0, 200.0, 300.0, 400.0, 500.0]
     latency = [12.0, 24.0, 36.0, 48.0, 60.0]
     assert pearson_correlation(rps, latency) == 1.0
+    assert pearson_correlation([10.0, 10.0, 10.0], [1.0, 2.0, 3.0]) == 0.0
+
+
+def test_ingest_validates_file_and_required_columns(tmp_path: pytest.TempPathFactory) -> None:
+    bad_csv = tmp_path / "missing_cols.csv"
+    bad_csv.write_text("record_id,service\nr1,checkout-api\n", encoding="utf-8")
+
+    with AnalyticsWorkbench(":memory:") as wb:
+        try:
+            wb.ingest_csv(bad_csv)
+            raise AssertionError("Expected ValueError for missing columns")
+        except ValueError as exc:
+            assert "Missing required CSV columns" in str(exc)

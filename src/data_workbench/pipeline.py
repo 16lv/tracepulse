@@ -71,12 +71,28 @@ class AnalyticsWorkbench:
         self.close()
 
     def ingest_csv(self, csv_path: Path) -> dict[str, int]:
-        # Skip rows with missing IDs, negative latencies, or error rates outside 0-100%
-        inserted = 0
+        path = Path(csv_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"Telemetry CSV file not found: {path}")
+
+        required_columns = {
+            "record_id",
+            "service",
+            "region",
+            "latency_ms",
+            "error_rate_pct",
+            "requests_per_sec",
+        }
+        valid_rows: list[tuple[str, str, str, float, float, int]] = []
         rejected = 0
 
-        with csv_path.open("r", encoding="utf-8", newline="") as fh:
+        with path.open("r", encoding="utf-8", newline="") as fh:
             reader = csv.DictReader(fh)
+            fieldnames = set(reader.fieldnames or ())
+            missing = sorted(required_columns - fieldnames)
+            if missing:
+                raise ValueError(f"Missing required CSV columns: {', '.join(missing)}")
+
             for row in reader:
                 try:
                     rec = TelemetryRecord(
@@ -91,42 +107,42 @@ class AnalyticsWorkbench:
                         not rec.record_id
                         or not rec.service
                         or not rec.region
-                        or math.isnan(rec.latency_ms)
+                        or not math.isfinite(rec.latency_ms)
                         or rec.latency_ms < 0.0
                         or not (0.0 <= rec.error_rate_pct <= 100.0)
                         or rec.requests_per_sec < 0
                     ):
                         rejected += 1
                         continue
-                    self._insert_record(rec)
-                    inserted += 1
+                    valid_rows.append(
+                        (
+                            rec.record_id,
+                            rec.service,
+                            rec.region,
+                            rec.latency_ms,
+                            rec.error_rate_pct,
+                            rec.requests_per_sec,
+                        )
+                    )
                 except (ValueError, TypeError):
                     rejected += 1
 
-        self._conn.commit()
-        return {"inserted": inserted, "rejected": rejected}
+        if valid_rows:
+            with self._conn:
+                self._conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO service_telemetry (
+                        record_id, service, region, latency_ms, error_rate_pct, requests_per_sec
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    valid_rows,
+                )
+        return {"inserted": len(valid_rows), "rejected": rejected}
 
     def to_dataframe(self) -> pd.DataFrame:
         return pd.read_sql_query(
             "SELECT * FROM service_telemetry ORDER BY record_id ASC",
             self._conn,
-        )
-
-    def _insert_record(self, rec: TelemetryRecord) -> None:
-        self._conn.execute(
-            """
-            INSERT OR REPLACE INTO service_telemetry (
-                record_id, service, region, latency_ms, error_rate_pct, requests_per_sec
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                rec.record_id,
-                rec.service,
-                rec.region,
-                rec.latency_ms,
-                rec.error_rate_pct,
-                rec.requests_per_sec,
-            ),
         )
 
     def summarize_by_service(self) -> list[ServiceStatistics]:
@@ -160,6 +176,8 @@ class AnalyticsWorkbench:
         service: str,
         z_threshold: float = 2.0,
     ) -> list[dict[str, Any]]:
+        if z_threshold <= 0.0:
+            raise ValueError("z_threshold must be positive")
         rows = self._conn.execute(
             """
             SELECT record_id, region, latency_ms
@@ -236,7 +254,11 @@ def pearson_correlation(xs: list[float], ys: list[float]) -> float:
         raise ValueError("Input series must have identical length >= 2")
     arr_x = np.asarray(xs, dtype=float)
     arr_y = np.asarray(ys, dtype=float)
+    if not (np.all(np.isfinite(arr_x)) and np.all(np.isfinite(arr_y))):
+        raise ValueError("Input series must contain finite numbers")
     if np.std(arr_x) == 0.0 or np.std(arr_y) == 0.0:
         return 0.0
     corr = float(np.corrcoef(arr_x, arr_y)[0, 1])
+    if math.isnan(corr):
+        return 0.0
     return round(corr, 4)

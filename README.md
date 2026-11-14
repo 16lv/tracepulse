@@ -1,59 +1,30 @@
-# Telemetry Latency Analyser (telemetry-latency-analyser)
+# telemetry-latency-analyser
 
-![CI Status](https://github.com/16lv/telemetry-latency-analyser/actions/workflows/ci.yml/badge.svg)
+Telemetry ingestion, anomaly detection, and visualisation pipeline written in **Python 3.12** using **SQLite**, **pandas**, **NumPy**, and **Matplotlib**.
 
-**Telemetry Latency Analyser** ($(System.Collections.Hashtable.newRepo)) is a telemetry data ingestion, SQLite analytical query engine, cohort aggregation, and statistical anomaly detection workbench built in **Python 3.12** with **pandas**, **NumPy**, and **matplotlib**.
+## Pipeline Stages
 
-## Why I Built It
+1. **CSV ingestion & validation**: `AnalyticsWorkbench.ingest_csv()` checks required headers (`record_id`, `service`, `region`, `latency_ms`, `error_rate_pct`, `requests_per_sec`), filters invalid or non-finite rows, and batch-loads valid records via `executemany()`.
+2. **Per-service aggregation**: `summarize_by_service()` computes sample counts, mean, median (`p50`), tail (`p95`), standard deviation, mean error rate, and total RPS across services.
+3. **Anomaly detection**: `detect_latency_anomalies()` flags records exceeding a configurable population z-score threshold (`|z| >= z_threshold`), handling zero-variance datasets cleanly.
+4. **Correlation & plotting**: `pearson_correlation()` computes `r` across paired series, and `export_latency_chart()` renders a non-interactive SVG/PNG p50-vs-p95 comparison chart using Matplotlib's `Agg` backend.
 
-Raw CSV service logs often contain missing identifiers, negative latencies, or out-of-range error percentages that silently skew averages and percentile charts if loaded straight into a notebook. I built Telemetry Latency Analyser to separate row-level validation from statistical aggregation, storing verified records in an indexed SQLite table before computing per-service percentiles (`p50`, `p95`), Z-score latency outliers, and headless SVG comparison charts.
-
-## Key Capabilities
-
-- **Row-Level Domain Validation (`ingest_csv`)**: Streams CSV telemetry files, rejects rows with blank primary keys, `NaN`/negative latencies, or error rates outside `[0.0, 100.0]`, and returns exact `inserted` vs `rejected` counts.
-- **SQLite + Pandas Aggregation (`summarize_by_service`)**: Queries clean observations into a pandas `DataFrame` and computes sample counts, mean, median (`p50`), 95th percentile (`p95`), population standard deviation ($\sigma$), mean error rate, and total requests/sec per service.
-- **Z-Score Outlier Detection (`detect_latency_anomalies`)**: Flags individual observations whose latency deviates by $\ge 2.0\sigma$ from their service baseline while guarding against zero-variance division errors (`std == 0.0`).
-- **Headless Chart Export (`export_latency_chart`)**: Uses `matplotlib`'s non-interactive `Agg` backend to render side-by-side median vs 95th-percentile latency bar charts in headless CI environments.
-- **Bivariate Correlation (`pearson_correlation`)**: Calculates Pearson's $r \in [-1.0, 1.0]$ between request throughput and response latency.
-
-## Project Structure
+## Structure
 
 ```text
-tracepulse/
+telemetry-latency-analyser/
+├── src/data_workbench/
+│   └── pipeline.py     # AnalyticsWorkbench, validation, summary stats, SVG chart export
+├── tests/
+│   └── test_pipeline.py
 ├── pyproject.toml
-├── src/
-│   └── data_workbench/
-│       ├── __init__.py
-│       └── pipeline.py      # AnalyticsWorkbench, Z-score detector & chart exporter
-└── tests/
-    └── test_pipeline.py     # Pytest suite verifying ingestion, stats & SVG output
+└── requirements.txt
 ```
 
-## Usage Example
-
-```python
-from pathlib import Path
-from src.data_workbench.pipeline import AnalyticsWorkbench
-
-with AnalyticsWorkbench(":memory:") as wb:
-    result = wb.ingest_csv(Path("telemetry.csv"))
-    print(f"Inserted: {result['inserted']}, Rejected: {result['rejected']}")
-
-    for stats in wb.summarize_by_service():
-        print(f"{stats.service}: p50={stats.median_latency_ms}ms, p95={stats.p95_latency_ms}ms")
-
-    anomalies = wb.detect_latency_anomalies("checkout-api", z_threshold=2.0)
-    wb.export_latency_chart(Path("artifacts/latency_chart.svg"))
-```
-
-## Running Tests & Linter
+## Development
 
 ```bash
 pip install -e ".[dev]"
 ruff check .
 pytest -v
 ```
-
-## Known Limitations & Future Improvements
-
-- Z-score outlier detection assumes an approximately normal latency distribution; adding Median Absolute Deviation (MAD) or Interquartile Range (IQR) fencing would reduce false positives on heavily right-skewed latency tails.
